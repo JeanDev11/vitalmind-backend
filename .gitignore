@@ -1,0 +1,70 @@
+# =========================
+# Entornos virtuales
+# =========================
+venv/
+env/
+.env/
+.venv/
+
+# =========================
+# Variables sensibles
+# =========================
+.env
+.env.local
+.env.*.local
+
+# =========================
+# Python cache
+# =========================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# =========================
+# Testing / coverage
+# =========================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# =========================
+# MyPy / lint
+# =========================
+.mypy_cache/
+.ruff_cache/
+
+# =========================
+# IDEs
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# OS
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Logs
+# =========================
+*.log
+logs/
+
+# =========================
+# Alembic (IMPORTANTE)
+# =========================
+# NO ignores migrations/versions
+# Solo evita archivos temporales si los hubiera
+alembic.ini~
+
+# =========================
+# Dist / builds
+# =========================
+dist/
+build/
+*.egg-info/
