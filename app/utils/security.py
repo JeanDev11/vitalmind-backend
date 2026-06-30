@@ -72,3 +72,38 @@ def generate_raw_token() -> str:
 def hash_token(raw_token: str) -> str:
     """SHA-256 del token en texto plano. Solo el hash se persiste en BD."""
     return hashlib.sha256(raw_token.encode()).hexdigest()
+
+
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.orm import Session
+from app.database import get_db
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+
+def get_current_personal(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
+    from app.models.personal import Personal
+
+    payload = decode_access_token(token)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido o expirado.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    id_personal = int(payload.get("sub"))
+    personal = db.query(Personal).filter_by(
+        id_personal=id_personal, activo=True
+    ).first()
+
+    if not personal:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario no encontrado o inactivo.",
+        )
+    return personal

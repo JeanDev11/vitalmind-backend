@@ -1,77 +1,51 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from typing import List
 
 from app.database import get_db
-from app.dependencies import get_current_user
 from app.models.personal import Personal
-from app.schemas.tamizaje import (
-    TamizajeCreate, TamizajeUpdate, TamizajeRead, TamizajeConEstadistica,
-)
-from app.schemas.token_acceso import TokenRegenerateRequest, TokenAccesoRead
-from app.services import tamizaje_service
-from app.services import token_service
+from app.schemas.tamizaje import TamizajeCreate, TamizajeRead, TamizajeUpdate, TamizajeConEstadistica
+from app.schemas.token_acceso import TokenRegenerateRequest
+from app.services import tamizaje_service, token_service
+from app.utils.security import get_current_personal
 
-router = APIRouter(
-    prefix="/tamizajes",
-    tags=["Tamizajes"],
-    dependencies=[Depends(get_current_user)],
-)
+router = APIRouter()
 
 
-@router.post("/", response_model=TamizajeRead, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=TamizajeRead, status_code=201)
 def crear_tamizaje(
     data: TamizajeCreate,
     db: Session = Depends(get_db),
-    current_user: Personal = Depends(get_current_user),
+    personal: Personal = Depends(get_current_personal),
 ):
-    """Crea un tamizaje en estado 'borrador'. Solo el personal autenticado puede crearlo."""
-    tamizaje = tamizaje_service.crear_tamizaje(data, current_user.id_personal, db)
+    """Crea un nuevo tamizaje en estado 'borrador'."""
+    tamizaje = tamizaje_service.crear_tamizaje(data, personal.id_personal, db)
     db.commit()
     db.refresh(tamizaje)
     return tamizaje
 
 
-@router.get("/", response_model=list[TamizajeRead])
-def listar_tamizajes(
-    estado: str | None = None,
-    db: Session = Depends(get_db),
-):
-    """
-    Lista todos los tamizajes.
-    Filtra opcionalmente por estado: borrador | activo | cerrado | anulado.
-    """
-    from app.models.tamizaje import Tamizaje
-    query = db.query(Tamizaje)
-    if estado:
-        query = query.filter_by(estado=estado)
-    return query.order_by(Tamizaje.fecha_creacion.desc()).all()
-
-
-@router.get("/{id_tamizaje}", response_model=TamizajeConEstadistica)
-def obtener_tamizaje(id_tamizaje: int, db: Session = Depends(get_db)):
-    """Devuelve el tamizaje con estadísticas de invitados y respondidos."""
-    return tamizaje_service.obtener_estadisticas(id_tamizaje, db)
-
-
-@router.put("/{id_tamizaje}", response_model=TamizajeRead)
+@router.patch("/{id_tamizaje}", response_model=TamizajeRead)
 def actualizar_tamizaje(
     id_tamizaje: int,
     data: TamizajeUpdate,
     db: Session = Depends(get_db),
+    _: Personal = Depends(get_current_personal),
 ):
-    """Edita campos del tamizaje. Solo permitido en estado 'borrador'."""
+    """Edita un tamizaje en estado 'borrador'."""
     tamizaje = tamizaje_service.actualizar_tamizaje(id_tamizaje, data, db)
     db.commit()
     db.refresh(tamizaje)
     return tamizaje
 
 
-@router.patch("/{id_tamizaje}/activar", response_model=TamizajeRead)
-def activar_tamizaje(id_tamizaje: int, db: Session = Depends(get_db)):
-    """
-    Cambia el estado del tamizaje de 'borrador' a 'activo'.
-    A partir de este momento se pueden enviar tokens a los alumnos.
-    """
+@router.post("/{id_tamizaje}/activar", response_model=TamizajeRead)
+def activar_tamizaje(
+    id_tamizaje: int,
+    db: Session = Depends(get_db),
+    _: Personal = Depends(get_current_personal),
+):
+    """Cambia el estado del tamizaje de 'borrador' a 'activo'."""
     tamizaje = tamizaje_service.activar_tamizaje(id_tamizaje, db)
     db.commit()
     db.refresh(tamizaje)
@@ -81,30 +55,39 @@ def activar_tamizaje(id_tamizaje: int, db: Session = Depends(get_db)):
 @router.post("/{id_tamizaje}/invitar")
 def invitar_alumnos(
     id_tamizaje: int,
-    ids_alumno: list[int],
+    ids_alumno: List[int],
     db: Session = Depends(get_db),
+    _: Personal = Depends(get_current_personal),
 ):
     """
-    Genera y envía tokens de acceso por email a una lista de alumnos.
-    Retorna un resumen con los enviados y los fallidos (p.ej. token duplicado).
-    El tamizaje debe estar en estado 'activo'.
+    Genera y envía tokens a una lista de alumnos para un tamizaje activo.
+    Retorna resumen de enviados y fallidos.
     """
     resultado = tamizaje_service.invitar_alumnos(id_tamizaje, ids_alumno, db)
     db.commit()
     return resultado
 
 
-@router.post("/{id_tamizaje}/regenerar-token", response_model=TokenAccesoRead)
+@router.post("/tokens/regenerar")
 def regenerar_token(
-    id_tamizaje: int,
-    body: TokenRegenerateRequest,
+    data: TokenRegenerateRequest,
     db: Session = Depends(get_db),
+    _: Personal = Depends(get_current_personal),
 ):
     """
-    Invalida el token anterior del alumno (pendiente o expirado)
-    y genera uno nuevo enviándolo por email. Cubre RN-05.
+    Invalida el token actual de un alumno en un tamizaje
+    y genera uno nuevo. Cubre RN-05.
     """
-    token = token_service.regenerar_token(id_tamizaje, body.id_alumno, db)
+    token_service.regenerar_token(data.id_tamizaje, data.id_alumno, db)
     db.commit()
-    db.refresh(token)
-    return token
+    return {"detail": "Token regenerado y enviado al alumno exitosamente."}
+
+
+@router.get("/{id_tamizaje}/estadisticas", response_model=TamizajeConEstadistica)
+def estadisticas_tamizaje(
+    id_tamizaje: int,
+    db: Session = Depends(get_db),
+    _: Personal = Depends(get_current_personal),
+):
+    """Panel de estado del tamizaje: invitados, respondidos y pendientes."""
+    return tamizaje_service.obtener_estadisticas(id_tamizaje, db)

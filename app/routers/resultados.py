@@ -1,82 +1,126 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from typing import List
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.models.personal import Personal
 from app.models.resultado_tamizaje import ResultadoTamizaje
 from app.models.alumno import Alumno
 from app.models.perfil_psicologico import PerfilPsicologico
 from app.schemas.resultado import ResultadoRead, ResultadoResumen, SolicitudInterpretacionIA
 from app.services.resultado_service import solicitar_interpretacion_ia
+from app.utils.security import get_current_personal
 
-router = APIRouter(
-    prefix="/resultados",
-    tags=["Resultados"],
-    dependencies=[Depends(get_current_user)],
-)
+router = APIRouter()
 
 
-def _enriquecer(resultado: ResultadoTamizaje, db: Session) -> dict:
-    """
-    Combina el ORM con datos de relaciones para cubrir los campos
-    nombre_alumno, codigo_matricula, nombre_perfil y nivel_riesgo
-    que ResultadoResumen/ResultadoRead requieren.
-    """
-    alumno = db.query(Alumno).filter_by(id_alumno=resultado.id_alumno).first()
-    perfil = (
-        db.query(PerfilPsicologico).filter_by(id_perfil=resultado.id_perfil).first()
-        if resultado.id_perfil else None
-    )
-    data = {
-        **resultado.__dict__,
-        "nombre_alumno":    alumno.nombre_completo if alumno else "—",
-        "codigo_matricula": alumno.codigo_matricula if alumno else "—",
-        "nombre_perfil":    perfil.nombre_perfil   if perfil  else None,
-        "nivel_riesgo":     perfil.nivel_riesgo    if perfil  else None,
-    }
-    data.pop("_sa_instance_state", None)
-    return data
-
-
-@router.get("/tamizaje/{id_tamizaje}", response_model=list[ResultadoResumen])
+@router.get("/tamizaje/{id_tamizaje}", response_model=List[ResultadoResumen])
 def listar_resultados_por_tamizaje(
     id_tamizaje: int,
+    nivel_riesgo: str | None = None,
     db: Session = Depends(get_db),
+    _: Personal = Depends(get_current_personal),
 ):
     """
-    Lista todos los resultados de un tamizaje.
-    Vista compacta para el panel de la psicóloga.
+    Panel principal de la psicóloga.
+    Lista todos los resultados de un tamizaje con filtro opcional por nivel de riesgo.
     """
-    resultados = (
+    query = (
         db.query(ResultadoTamizaje)
-        .filter_by(id_tamizaje=id_tamizaje)
-        .order_by(ResultadoTamizaje.fecha_calculo.desc())
-        .all()
+        .join(Alumno, ResultadoTamizaje.id_alumno == Alumno.id_alumno)
+        .filter(ResultadoTamizaje.id_tamizaje == id_tamizaje)
     )
-    return [ResultadoResumen(**_enriquecer(r, db)) for r in resultados]
+
+    if nivel_riesgo:
+        query = query.join(
+            PerfilPsicologico,
+            ResultadoTamizaje.id_perfil == PerfilPsicologico.id_perfil,
+        ).filter(PerfilPsicologico.nivel_riesgo == nivel_riesgo)
+
+    resultados = query.all()
+
+    return [
+        ResultadoResumen(
+            id_resultado=r.id_resultado,
+            id_alumno=r.id_alumno,
+            nombre_alumno=r.alumno.nombre_completo,
+            codigo_matricula=r.alumno.codigo_matricula,
+            nombre_perfil=r.perfil.nombre_perfil if r.perfil else None,
+            nivel_riesgo=r.perfil.nivel_riesgo if r.perfil else None,
+            puntaje_emotividad=float(r.puntaje_emotividad) if r.puntaje_emotividad else None,
+            puntaje_actividad=float(r.puntaje_actividad) if r.puntaje_actividad else None,
+            puntaje_resonancia=float(r.puntaje_resonancia) if r.puntaje_resonancia else None,
+            alerta_emotividad_alta=r.alerta_emotividad_alta,
+            estado_calculo=r.estado_calculo,
+            fecha_calculo=r.fecha_calculo,
+        )
+        for r in resultados
+    ]
 
 
 @router.get("/{id_resultado}", response_model=ResultadoRead)
-def obtener_resultado(id_resultado: int, db: Session = Depends(get_db)):
-    """Devuelve el perfil completo con interpretación IA si está disponible."""
-    resultado = db.query(ResultadoTamizaje).filter_by(
-        id_resultado=id_resultado
-    ).first()
-    if not resultado:
+def obtener_resultado(
+    id_resultado: int,
+    db: Session = Depends(get_db),
+    _: Personal = Depends(get_current_personal),
+):
+    """Perfil completo de un alumno incluyendo interpretación IA si está disponible."""
+    r = db.query(ResultadoTamizaje).filter_by(id_resultado=id_resultado).first()
+    if not r:
         raise HTTPException(status_code=404, detail="Resultado no encontrado.")
-    return ResultadoRead(**_enriquecer(resultado, db))
+
+    return ResultadoRead(
+        id_resultado=r.id_resultado,
+        id_alumno=r.id_alumno,
+        nombre_alumno=r.alumno.nombre_completo,
+        codigo_matricula=r.alumno.codigo_matricula,
+        id_tamizaje=r.id_tamizaje,
+        nombre_perfil=r.perfil.nombre_perfil if r.perfil else None,
+        nivel_riesgo=r.perfil.nivel_riesgo if r.perfil else None,
+        puntaje_emotividad=float(r.puntaje_emotividad) if r.puntaje_emotividad else None,
+        puntaje_actividad=float(r.puntaje_actividad) if r.puntaje_actividad else None,
+        puntaje_resonancia=float(r.puntaje_resonancia) if r.puntaje_resonancia else None,
+        puntaje_total=float(r.puntaje_total) if r.puntaje_total else None,
+        alerta_emotividad_alta=r.alerta_emotividad_alta,
+        estado_calculo=r.estado_calculo,
+        fecha_calculo=r.fecha_calculo,
+        ia_diagnostico=r.ia_diagnostico,
+        ia_caracteristicas=r.ia_caracteristicas,
+        ia_recomendaciones=r.ia_recomendaciones,
+    )
 
 
 @router.post("/interpretar-ia", response_model=ResultadoRead)
 def interpretar_con_ia(
-    body: SolicitudInterpretacionIA,
+    data: SolicitudInterpretacionIA,
     db: Session = Depends(get_db),
+    _: Personal = Depends(get_current_personal),
 ):
     """
-    Genera la interpretación IA bajo demanda para perfiles de monitoreo
+    Genera interpretación IA bajo demanda para perfiles de monitoreo
     (Colérico, Sentimental) que no la reciben automáticamente.
     """
-    resultado = solicitar_interpretacion_ia(body.id_resultado, db)
+    resultado = solicitar_interpretacion_ia(data.id_resultado, db)
     db.commit()
     db.refresh(resultado)
-    return ResultadoRead(**_enriquecer(resultado, db))
+
+    r = resultado
+    return ResultadoRead(
+        id_resultado=r.id_resultado,
+        id_alumno=r.id_alumno,
+        nombre_alumno=r.alumno.nombre_completo,
+        codigo_matricula=r.alumno.codigo_matricula,
+        id_tamizaje=r.id_tamizaje,
+        nombre_perfil=r.perfil.nombre_perfil if r.perfil else None,
+        nivel_riesgo=r.perfil.nivel_riesgo if r.perfil else None,
+        puntaje_emotividad=float(r.puntaje_emotividad) if r.puntaje_emotividad else None,
+        puntaje_actividad=float(r.puntaje_actividad) if r.puntaje_actividad else None,
+        puntaje_resonancia=float(r.puntaje_resonancia) if r.puntaje_resonancia else None,
+        puntaje_total=float(r.puntaje_total) if r.puntaje_total else None,
+        alerta_emotividad_alta=r.alerta_emotividad_alta,
+        estado_calculo=r.estado_calculo,
+        fecha_calculo=r.fecha_calculo,
+        ia_diagnostico=r.ia_diagnostico,
+        ia_caracteristicas=r.ia_caracteristicas,
+        ia_recomendaciones=r.ia_recomendaciones,
+    )

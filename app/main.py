@@ -22,24 +22,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # --- Routers (se irán registrando conforme se implementen) ---
-# from app.routers import auth, alumnos, tamizajes, cuestionario, resultados, citas
-# app.include_router(auth.router,          prefix="/auth",          tags=["Autenticación"])
-# app.include_router(alumnos.router,       prefix="/alumnos",       tags=["Alumnos"])
-# app.include_router(tamizajes.router,     prefix="/tamizajes",     tags=["Tamizajes"])
-# app.include_router(cuestionario.router,  prefix="/cuestionario",  tags=["Cuestionario Alumno"])
-# app.include_router(resultados.router,    prefix="/resultados",    tags=["Resultados"])
-# app.include_router(citas.router,         prefix="/citas",         tags=["Agenda y Citas"])
-
-# Registro de routers
-app.include_router(auth.router)
-app.include_router(alumnos.router)
-app.include_router(tamizajes.router)
-app.include_router(cuestionario.router)
-app.include_router(resultados.router)
-app.include_router(disponibilidad.router)
-app.include_router(citas.router)
+app.include_router(auth.router,           prefix="/auth",           tags=["Autenticación"])
+app.include_router(alumnos.router,        prefix="/alumnos",        tags=["Alumnos"])
+app.include_router(tamizajes.router,      prefix="/tamizajes",      tags=["Tamizajes"])
+app.include_router(cuestionario.router,   prefix="/cuestionario",   tags=["Cuestionario Alumno"])
+app.include_router(resultados.router,     prefix="/resultados",     tags=["Resultados"])
+app.include_router(disponibilidad.router, prefix="/disponibilidad", tags=["Disponibilidad"])
+app.include_router(citas.router,          prefix="/citas",          tags=["Agenda y Citas"])
 
 @app.get("/", tags=["Health"])
 def health_check():
