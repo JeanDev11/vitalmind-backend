@@ -5,7 +5,7 @@ from typing import List
 from app.database import get_db
 from app.models.personal import Personal
 from app.schemas.tamizaje import TamizajeCreate, TamizajeRead, TamizajeUpdate, TamizajeConEstadistica
-from app.schemas.token_acceso import TokenRegenerateRequest
+from app.schemas.token_acceso import TokenRegenerateRequest, TokenAccesoConAlumnoRead
 from app.services import tamizaje_service, token_service
 from app.utils.security import get_current_personal
 
@@ -23,6 +23,16 @@ def crear_tamizaje(
     db.commit()
     db.refresh(tamizaje)
     return tamizaje
+
+
+@router.get("/", response_model=List[TamizajeRead])
+def listar_tamizajes(
+    estado: str | None = None,
+    db: Session = Depends(get_db),
+    _: Personal = Depends(get_current_personal),
+):
+    """Lista todos los tamizajes, opcionalmente filtrados por estado."""
+    return tamizaje_service.listar_tamizajes(db, estado)
 
 
 @router.patch("/{id_tamizaje}", response_model=TamizajeRead)
@@ -81,6 +91,28 @@ def regenerar_token(
     token_service.regenerar_token(data.id_tamizaje, data.id_alumno, db)
     db.commit()
     return {"detail": "Token regenerado y enviado al alumno exitosamente."}
+
+
+@router.get("/{id_tamizaje}/tokens", response_model=List[TokenAccesoConAlumnoRead])
+def listar_tokens(
+    id_tamizaje: int,
+    db: Session = Depends(get_db),
+    _: Personal = Depends(get_current_personal),
+):
+    """Lista los alumnos invitados a un tamizaje con el estado de su token de acceso."""
+    tokens = tamizaje_service.listar_tokens_de_tamizaje(id_tamizaje, db)
+    return [
+        TokenAccesoConAlumnoRead(
+            id_token=t.id_token,
+            id_alumno=t.id_alumno,
+            nombre_alumno=t.alumno.nombre_completo,
+            codigo_matricula=t.alumno.codigo_matricula,
+            estado=t.estado,
+            fecha_expiracion=t.fecha_expiracion,
+            fecha_uso=t.fecha_uso,
+        )
+        for t in tokens
+    ]
 
 
 @router.get("/{id_tamizaje}/estadisticas", response_model=TamizajeConEstadistica)

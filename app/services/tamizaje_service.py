@@ -26,6 +26,13 @@ def crear_tamizaje(
     return tamizaje
 
 
+def listar_tamizajes(db: Session, estado: str | None = None) -> list[Tamizaje]:
+    query = db.query(Tamizaje)
+    if estado:
+        query = query.filter_by(estado=estado)
+    return query.order_by(Tamizaje.fecha_creacion.desc()).all()
+
+
 def activar_tamizaje(id_tamizaje: int, db: Session) -> Tamizaje:
     tamizaje = _get_or_404(id_tamizaje, db)
     if tamizaje.estado != "borrador":
@@ -79,6 +86,17 @@ def invitar_alumnos(
             })
 
     return resultados
+
+
+def listar_tokens_de_tamizaje(id_tamizaje: int, db: Session) -> list[TokenAcceso]:
+    _get_or_404(id_tamizaje, db)
+    return (
+        db.query(TokenAcceso)
+        .filter_by(id_tamizaje=id_tamizaje)
+        .join(Alumno, TokenAcceso.id_alumno == Alumno.id_alumno)
+        .order_by(Alumno.nombre_completo)
+        .all()
+    )
 
 
 def obtener_estadisticas(

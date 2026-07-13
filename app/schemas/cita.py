@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, date, time
 from typing import Optional
 
 
@@ -27,5 +27,8 @@ class CitaRead(BaseModel):
     estado: str
     notas_sesion: Optional[str]
     fecha_creacion: datetime
+    fecha: date
+    hora_inicio: time
+    hora_fin: time
 
     model_config = {"from_attributes": True}

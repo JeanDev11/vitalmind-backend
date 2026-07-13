@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
-from app.routers import auth, alumnos, tamizajes, cuestionario, resultados, disponibilidad, citas
+from app.routers import auth, alumnos, tamizajes, cuestionario, resultados, disponibilidad, citas, instrumentos
 
 settings = get_settings()
 
@@ -30,6 +30,7 @@ app.include_router(cuestionario.router,   prefix="/cuestionario",   tags=["Cuest
 app.include_router(resultados.router,     prefix="/resultados",     tags=["Resultados"])
 app.include_router(disponibilidad.router, prefix="/disponibilidad", tags=["Disponibilidad"])
 app.include_router(citas.router,          prefix="/citas",          tags=["Agenda y Citas"])
+app.include_router(instrumentos.router,   prefix="/instrumentos",   tags=["Instrumentos"])
 
 @app.get("/", tags=["Health"])
 def health_check():

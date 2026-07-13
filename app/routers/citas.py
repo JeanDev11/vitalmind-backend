@@ -11,6 +11,24 @@ from app.utils.security import get_current_personal
 router = APIRouter()
 
 
+def _to_cita_read(cita) -> CitaRead:
+    return CitaRead(
+        id_cita=cita.id_cita,
+        id_slot=cita.id_slot,
+        id_alumno=cita.id_alumno,
+        nombre_alumno=cita.alumno.nombre_completo,
+        id_personal=cita.id_personal,
+        id_resultado_origen=cita.id_resultado_origen,
+        motivo=cita.motivo,
+        estado=cita.estado,
+        notas_sesion=cita.notas_sesion,
+        fecha_creacion=cita.fecha_creacion,
+        fecha=cita.slot.fecha,
+        hora_inicio=cita.slot.hora_inicio,
+        hora_fin=cita.slot.hora_fin,
+    )
+
+
 @router.post("/", response_model=CitaRead, status_code=201)
 def agendar_cita(
     data: CitaCreate,
@@ -26,18 +44,7 @@ def agendar_cita(
     db.commit()
     db.refresh(cita)
 
-    return CitaRead(
-        id_cita=cita.id_cita,
-        id_slot=cita.id_slot,
-        id_alumno=cita.id_alumno,
-        nombre_alumno=cita.alumno.nombre_completo,
-        id_personal=cita.id_personal,
-        id_resultado_origen=cita.id_resultado_origen,
-        motivo=cita.motivo,
-        estado=cita.estado,
-        notas_sesion=cita.notas_sesion,
-        fecha_creacion=cita.fecha_creacion,
-    )
+    return _to_cita_read(cita)
 
 
 @router.patch("/{id_cita}", response_model=CitaRead)
@@ -55,18 +62,7 @@ def actualizar_estado_cita(
     db.commit()
     db.refresh(cita)
 
-    return CitaRead(
-        id_cita=cita.id_cita,
-        id_slot=cita.id_slot,
-        id_alumno=cita.id_alumno,
-        nombre_alumno=cita.alumno.nombre_completo,
-        id_personal=cita.id_personal,
-        id_resultado_origen=cita.id_resultado_origen,
-        motivo=cita.motivo,
-        estado=cita.estado,
-        notas_sesion=cita.notas_sesion,
-        fecha_creacion=cita.fecha_creacion,
-    )
+    return _to_cita_read(cita)
 
 
 @router.get("/", response_model=List[CitaRead])
@@ -76,19 +72,4 @@ def listar_citas(
 ):
     """Lista todas las citas de la psicóloga autenticada."""
     citas = listar_citas_personal(personal.id_personal, db)
-
-    return [
-        CitaRead(
-            id_cita=c.id_cita,
-            id_slot=c.id_slot,
-            id_alumno=c.id_alumno,
-            nombre_alumno=c.alumno.nombre_completo,
-            id_personal=c.id_personal,
-            id_resultado_origen=c.id_resultado_origen,
-            motivo=c.motivo,
-            estado=c.estado,
-            notas_sesion=c.notas_sesion,
-            fecha_creacion=c.fecha_creacion,
-        )
-        for c in citas
-    ]
+    return [_to_cita_read(c) for c in citas]
