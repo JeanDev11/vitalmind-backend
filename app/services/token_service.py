@@ -11,10 +11,6 @@ from app.config import get_settings
 
 settings = get_settings()
 
-# URL base del frontend — idealmente en .env en producción
-FRONTEND_BASE_URL = "http://localhost:5173"
-
-
 def _get_tamizaje_activo(id_tamizaje: int, db: Session) -> Tamizaje:
     tamizaje = db.query(Tamizaje).filter_by(id_tamizaje=id_tamizaje).first()
     if not tamizaje:
@@ -73,7 +69,7 @@ def generar_y_enviar_token(
         nombre_tamizaje=tamizaje.nombre,
         raw_token=raw_token,
         fecha_limite=tamizaje.fecha_limite_respuesta.strftime("%d/%m/%Y %H:%M"),
-        base_url=FRONTEND_BASE_URL,
+        base_url=settings.frontend_url,
     )
 
     return token
