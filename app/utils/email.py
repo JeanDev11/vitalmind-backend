@@ -1,30 +1,34 @@
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
+import requests
 from typing import Optional
 
 from app.config import get_settings
 
 settings = get_settings()
 
-
-def _build_connection() -> smtplib.SMTP:
-    server = smtplib.SMTP(settings.smtp_host, settings.smtp_port)
-    server.ehlo()
-    server.starttls()
-    server.login(settings.smtp_user, settings.smtp_password)
-    return server
+BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
 
 
 def _send(to_email: str, subject: str, html_body: str) -> None:
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"]    = settings.email_from
-    msg["To"]      = to_email
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "api-key": settings.brevo_api_key,
+    }
+    payload = {
+        "sender": {"name": "VitalMind FISI", "email": settings.brevo_sender_email},
+        "to": [{"email": to_email}],
+        "subject": subject,
+        "htmlContent": html_body,
+    }
 
-    with _build_connection() as server:
-        server.sendmail(settings.smtp_user, to_email, msg.as_string())
+    response = requests.post(BREVO_API_URL, json=payload, headers=headers, timeout=15)
+
+    if response.status_code not in (200, 201):
+        # Preserva el comportamiento anterior: una falla de envío debe
+        # propagarse como excepción para que el caller (services) la maneje.
+        raise RuntimeError(
+            f"Error enviando correo via Brevo ({response.status_code}): {response.text}"
+        )
 
 
 # ---------------------------------------------------------------------------

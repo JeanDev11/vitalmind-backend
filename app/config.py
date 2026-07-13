@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     smtp_password: str
     email_from: str
 
+    brevo_api_key: str
+    brevo_sender_email: str = "vitalmind.fisi@gmail.com"
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
