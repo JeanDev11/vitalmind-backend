@@ -68,3 +68,8 @@ alembic.ini~
 dist/
 build/
 *.egg-info/
+
+# =========================
+# Frontend (repo de GitHub aparte, ver frontend/README)
+# =========================
+frontend/

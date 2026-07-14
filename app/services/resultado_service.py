@@ -7,6 +7,7 @@ from app.models.resultado_tamizaje import ResultadoTamizaje
 from app.models.respuesta_item import RespuestaItem
 from app.models.opcion_respuesta import OpcionRespuesta
 from app.models.instrumento import Instrumento
+from app.models.perfil_psicologico import PerfilPsicologico
 from app.schemas.sesion_respuesta import RespuestaEnvioRequest
 from app.services.calificacion.berger import CalculadorBergerInterno
 from app.services.calificacion.ia_gemini import CalculadorViaIA
@@ -83,6 +84,29 @@ def persistir_respuestas_y_calcular(
             "ia_recomendaciones": None,
         }
         estado_calculo = "error"
+
+    # Paso 4.5 — Interpretación IA automática para riesgo crítico.
+    # No depende de instrumento.tipo_calificacion (eso decide el motor de
+    # PUNTAJES para todo el instrumento); esto es una regla de negocio aparte
+    # que solo dispara IA para el resultado individual si su perfil resultó
+    # de riesgo crítico. Si Gemini falla, no bloquea el envío del alumno —
+    # el resultado numérico ya quedó calculado y persistido igual; la
+    # psicóloga puede reintentar manualmente con el botón bajo demanda.
+    if estado_calculo == "completado" and not datos_resultado.get("ia_diagnostico"):
+        perfil = None
+        if datos_resultado.get("id_perfil"):
+            perfil = db.query(PerfilPsicologico).filter_by(
+                id_perfil=datos_resultado["id_perfil"]
+            ).first()
+
+        if perfil and perfil.nivel_riesgo == "critico":
+            try:
+                datos_ia = CalculadorViaIA().calcular(sesion, db)
+                datos_resultado["ia_diagnostico"] = datos_ia.get("ia_diagnostico")
+                datos_resultado["ia_caracteristicas"] = datos_ia.get("ia_caracteristicas")
+                datos_resultado["ia_recomendaciones"] = datos_ia.get("ia_recomendaciones")
+            except Exception as e:
+                print(f"[WARN] Interpretación IA automática (riesgo crítico) falló para sesión {sesion.id_sesion}: {e}")
 
     # Paso 5 — Persistir resultado
     resultado = ResultadoTamizaje(
