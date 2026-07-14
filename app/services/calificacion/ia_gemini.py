@@ -101,10 +101,15 @@ class CalculadorViaIA(ICalculadorPerfil):
 
             response = client.models.generate_content(
                 model=MODEL_NAME,
-                prompt=prompt,
+                contents=prompt,
                 config=configuracion_json,
             )
 
+            # El nuevo SDK autocompleta el esquema Pydantic en 'response.parsed'
+            if response.parsed:
+                return response.parsed.model_dump()
+            
+            # En caso de que falle el parser automático, mantenemos tu fallback original
             return json.loads(response.text)
 
         except Exception as e:
