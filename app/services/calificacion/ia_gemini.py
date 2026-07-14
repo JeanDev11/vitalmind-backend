@@ -13,7 +13,7 @@ from app.services.calificacion.berger import CalculadorBergerInterno
 settings = get_settings()
 
 client = genai.Client(api_key=settings.gemini_api_key)
-MODEL_NAME = "gemini-1.5-flash"
+MODEL_NAME = "gemini-2.5-flash"
 
 # Definimos la estructura exacta que DEBE retornar la IA
 class InformePsicologico(BaseModel):
